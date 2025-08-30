@@ -102,7 +102,7 @@ export default function ChatBot() {
                   <div
                     className="p-3 mb-2"
                     style={{
-                      background: "rgba(52, 58, 64, 0.85)",
+                      
                       borderLeft: "4px solid #3b82f6",
                       borderRadius: "12px",
                       boxShadow: "0 6px 20px rgba(0,0,0,0.4)"
