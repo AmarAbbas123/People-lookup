@@ -19,3 +19,4 @@ client/build/
 server/dist/
 ".env" 
 ".env" 
+.env
