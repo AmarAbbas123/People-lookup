@@ -12,8 +12,6 @@ yarn-error.log*
 .env
 
 # OS files
-
-
 .DS_Store
 
 # Client/build or server/dist (if you build your project)
