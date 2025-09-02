@@ -18,3 +18,4 @@ yarn-error.log*
 client/build/
 server/dist/
 ".env" 
+".env" 
