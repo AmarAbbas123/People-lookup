@@ -593,16 +593,16 @@ export default function App() {
             {/* Footer Content */}
             <div className='col-md-4  text-center '>
               <h4 className='text-light mb-2'>Menu</h4>
-              <div className='mb-1 d-flex align-items-center gap-2'>
+              <div className='mb-1 d-flex justify-content-center align-items-center gap-2'>
                 <span className='fs-5 text-info'> 📞</span>
                 <span className='text-light'>+1 (555) 123-4567</span>
               </div>
 
-              <div className='mb-3 d-flex align-items-center gap-2'>
+              <div className='mb-3 d-flex justify-content-center align-items-center gap-2'>
                 <span className='fs-5 text-info'> ✉️</span>
                 <span className='text-light'>support@peoplefinder.com</span>
               </div>
-              <div className='d-flex gap-3 mt-4'>
+              <div className='d-flex justify-content-center gap-3 mt-4'>
                 {[
                   {
                     icon: <FaFacebookF />,
