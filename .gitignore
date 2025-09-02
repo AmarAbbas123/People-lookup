@@ -12,7 +12,7 @@ yarn-error.log*
 .env
 
 # OS files
-# ***REMOVED***
+
 
 .DS_Store
 
