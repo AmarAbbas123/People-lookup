@@ -12,6 +12,8 @@ yarn-error.log*
 .env
 
 # OS files
+# ***REMOVED***
+
 .DS_Store
 
 # Client/build or server/dist (if you build your project)
