@@ -4,8 +4,10 @@ const csv = require("csv-parser");
 const fs = require("fs");
 const path = require("path");
 const Person = require("../models/Person");
+const OpenAI = require("openai");
 
 const router = express.Router();
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Multer upload config
 const upload = multer({
@@ -13,7 +15,6 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
 });
 
-// Detect CSV separator
 function detectSeparator(filePath) {
   try {
     const sample = fs.readFileSync(filePath, "utf8").slice(0, 2000);
@@ -28,7 +29,6 @@ function detectSeparator(filePath) {
   }
 }
 
-// Normalize row keys
 function mapRow(row) {
   const norm = {};
   for (const [k, v] of Object.entries(row)) {
@@ -50,18 +50,57 @@ function mapRow(row) {
   };
 }
 
-// Upload CSV
+function docToEmbedText(p) {
+  return [
+    `Name: ${p.name}`,
+    p.description ? `Description: ${p.description}` : "",
+    p.category ? `Category: ${p.category}` : "",
+    p.blockchain ? `Blockchain: ${p.blockchain}` : "",
+    p.device ? `Device: ${p.device}` : "",
+    p.status ? `Status: ${p.status}` : "",
+    p.nft ? `NFT: ${p.nft}` : "",
+    p.f2p ? `F2P: ${p.f2p}` : "",
+    p.p2e ? `P2E: ${p.p2e}` : "",
+    (p.p2e_score ?? "") !== "" ? `P2E Score: ${p.p2e_score}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function embedBatch(docs) {
+  if (!docs.length) return [];
+  const model = process.env.EMBEDDING_MODEL || "text-embedding-3-small";
+  const input = docs.map(docToEmbedText);
+  const resp = await openai.embeddings.create({ model, input });
+  // Return array of vectors
+  return resp.data.map((d) => d.embedding);
+}
+
+// Upload CSV and create embeddings in batches
 router.post("/upload", upload.single("file"), async (req, res, next) => {
   if (!req.file) return res.status(400).json({ message: "CSV file is required" });
 
   const filePath = req.file.path;
   const separator = detectSeparator(filePath);
-  const batchSize = 1000;
+  const batchSize = 100; // embedding batch
+  const upsertBatchSize = 500; // db bulkWrite batch
 
   let parsedRows = 0;
   let totalUpserted = 0;
-  let batch = [];
-  let bulkOps = []; // promises for all bulkWrites
+  let pending = [];
+
+  const upsertDocs = async (docs) => {
+    if (!docs.length) return;
+    const ops = docs.map((p) => ({
+      updateOne: {
+        filter: { name: p.name },
+        update: { $set: p },
+        upsert: true,
+      },
+    }));
+    const r = await Person.bulkWrite(ops, { ordered: false });
+    totalUpserted += (r.upsertedCount || 0) + (r.modifiedCount || 0);
+  };
 
   try {
     await new Promise((resolve, reject) => {
@@ -72,57 +111,38 @@ router.post("/upload", upload.single("file"), async (req, res, next) => {
         parsedRows++;
         const mapped = mapRow(row);
         if (!mapped.name) return;
+        pending.push(mapped);
 
-        batch.push(mapped);
-
-        if (batch.length >= batchSize) {
-          const currentBatch = batch;
-          batch = [];
-
-          // push promise to bulkOps array
-          bulkOps.push(
-            Person.bulkWrite(
-              currentBatch.map((p) => ({
-                updateOne: {
-                  filter: { name: p.name },
-                  update: { $set: p },
-                  upsert: true,
-                },
-              })),
-              { ordered: false }
-            )
-              .then((r) => {
-                totalUpserted += (r.upsertedCount || 0) + (r.modifiedCount || 0);
-              })
-              .catch((err) => {
-                console.error("Bulk insert error:", err.message);
-              })
-          );
+        // If embedding batch filled, embed + attach vectors
+        if (pending.length >= batchSize) {
+          parser.pause();
+          (async () => {
+            try {
+              const vectors = await embedBatch(pending);
+              const enriched = pending.map((p, i) => ({ ...p, embedding: vectors[i] || [] }));
+              await upsertDocs(enriched);
+              pending = [];
+              parser.resume();
+            } catch (e) {
+              console.error("Embedding/upsert batch error:", e.message);
+              parser.resume();
+            }
+          })();
         }
       });
 
       parser.on("end", async () => {
-        if (batch.length > 0) {
-          bulkOps.push(
-            Person.bulkWrite(
-              batch.map((p) => ({
-                updateOne: {
-                  filter: { name: p.name },
-                  update: { $set: p },
-                  upsert: true,
-                },
-              })),
-              { ordered: false }
-            )
-              .then((r) => {
-                totalUpserted += (r.upsertedCount || 0) + (r.modifiedCount || 0);
-              })
-              .catch((err) => {
-                console.error("Final batch error:", err.message);
-              })
-          );
+        try {
+          if (pending.length) {
+            const vectors = await embedBatch(pending);
+            const enriched = pending.map((p, i) => ({ ...p, embedding: vectors[i] || [] }));
+            await upsertDocs(enriched);
+            pending = [];
+          }
+          resolve();
+        } catch (e) {
+          reject(e);
         }
-        resolve();
       });
 
       parser.on("error", reject);
@@ -130,12 +150,9 @@ router.post("/upload", upload.single("file"), async (req, res, next) => {
       readStream.pipe(parser);
     });
 
-    // Wait for all bulk operations
-    await Promise.all(bulkOps);
-
     const dbCount = await Person.countDocuments();
     res.json({
-      message: "CSV processed",
+      message: "CSV processed with embeddings",
       parsedRows,
       totalUpserted,
       dbCount,
@@ -147,12 +164,11 @@ router.post("/upload", upload.single("file"), async (req, res, next) => {
   }
 });
 
-// Search people
+// (Kept) simple search endpoint if you still need it
 router.get("/people", async (req, res, next) => {
   try {
     const { name, limit } = req.query;
     if (!name) return res.status(400).json({ message: "Query param 'name' is required" });
-
     const queryLimit = Math.min(Number(limit) || 100, 1000);
     const people = await Person.find({ name: { $regex: new RegExp(name, "i") } })
       .limit(queryLimit)
