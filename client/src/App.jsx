@@ -71,7 +71,7 @@ export default function App() {
         }}
       >
         <nav className='container d-flex justify-content-between align-items-center py-3'>
-          <div className='fw-bold fs-4 text-warning'>⚡ People Finder</div>
+          <div className='fw-bold fs-4 text-warning'>⚡ People Search</div>
           <button
             className='d-md-none btn text-light fs-4'
             onClick={toggleMenu}
@@ -272,7 +272,7 @@ export default function App() {
             <div className='col-lg-6 mb-4 mb-lg-0'>
               <h2 className='display-5 fw-bold mb-3'>About Us</h2>
               <p className='lead mb-3'>
-                People Finder is an AI-powered platform to explore and interact
+                People Search is an AI-powered platform to explore and interact
                 with your datasets like never before.
               </p>
               <p className='mb-4'>
@@ -553,10 +553,10 @@ export default function App() {
             {/* Logo */}
             <div className='col-md-4 mb-3 mb-md-0 text-center text-md-start'>
               <span className='fw-bold fs-5 text-warning'>
-                ⚡ People Finder
+                ⚡ People Search
               </span>
               <p className='small text-light mt-1'>
-                People Finder is an AI-powered platform to explore and interact
+                People Search is an AI-powered platform to explore and interact
                 with your datasets like never before. Our mission is to make
                 data exploration fun, fast, and visually appealing. Perfect for
                 communities, blockchain enthusiasts, and professional networks.
@@ -598,7 +598,7 @@ export default function App() {
 
             {/* Footer Content */}
             <div className='col-md-4  text-center '>
-              <h4 className='text-light mb-2'>Contact</h4>
+              <h4 className='text-light mb-2'></h4>
               <div className='mb-1 d-flex justify-content-center align-items-center gap-2'>
                 <span className='fs-5 text-info'> 📞</span>
                 <span className='text-light'>+1 (555) 123-4567</span>
