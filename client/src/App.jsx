@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import axios from 'axios';
 import ChatBot from './components/ChatBot';
-import { FaBars, FaTimes, FaUpload, FaRobot } from 'react-icons/fa';
+import { FaBars, FaTimes, FaUpload, FaRobot,FaSearch } from 'react-icons/fa';
 import {
   FaFacebookF,
   FaTwitter,
@@ -18,11 +18,21 @@ export default function App() {
   const [loadingUpload, setLoadingUpload] = useState(false);
   const [csvUploaded, setCsvUploaded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [query, setQuery] = useState("");
 
   const uploadRef = useRef(null);
   const chatRef = useRef(null);
 
   const toggleMenu = () => setMenuOpen(!menuOpen);
+
+    const handleSearch = (e) => {
+    e.preventDefault();
+    if (query.trim()) {
+      console.log("Searching for:", query); // 🔍 Replace with real logic
+      if (onSearch) onSearch(query);
+    }
+  };
 
   const scrollToSection = (ref) => {
     if (ref.current) {
@@ -62,81 +72,110 @@ export default function App() {
     >
       {/* Header */}
       <header
-        className='fixed-top shadow-sm'
-        style={{
-          backdropFilter: 'blur(10px)',
-          zIndex: 999,
-          background: '#0F1C2B',
-          transition: '0.3s',
-        }}
-      >
-        <nav className='container d-flex justify-content-between align-items-center py-3'>
-          <div className='fw-bold fs-4 text-warning'>⚡ People Search</div>
-          <button
-            className='d-md-none btn text-light fs-4'
-            onClick={toggleMenu}
-            style={{
-              transition: '0.3s',
-              borderRadius: '8px',
-              padding: '4px 8px',
-              background: 'rgba(255,255,255,0.1)',
-            }}
+      className="fixed-top shadow-sm"
+      style={{
+        backdropFilter: "blur(10px)",
+        zIndex: 999,
+        background: "#0F1C2B",
+        transition: "0.3s",
+      }}
+    >
+      <nav className="container d-flex justify-content-between align-items-center py-3">
+        {/* Left - Logo */}
+        <div className="fw-bold fs-4 text-warning">⚡ People Search</div>
+
+        {/* Center - Menu */}
+        <ul className="d-none d-md-flex list-unstyled gap-4 mb-0 align-items-center mx-auto">
+          <li
+            style={{ cursor: "pointer" }}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           >
-            {menuOpen ? <FaTimes /> : <FaBars />}
-          </button>
-          <ul className='d-none d-md-flex list-unstyled gap-4 mb-0'>
+            Home
+          </li>
+          <li style={{ cursor: "pointer" }} onClick={() => scrollToSection(uploadRef)}>
+            About
+          </li>
+          <li style={{ cursor: "pointer" }} onClick={() => scrollToSection(uploadRef)}>
+            Upload
+          </li>
+          <li style={{ cursor: "pointer" }} onClick={() => scrollToSection(chatRef)}>
+            ChatBot
+          </li>
+        </ul>
+
+        {/* Right - Search (only desktop) */}
+        <div className="d-none d-md-flex align-items-center">
+          {!showSearch ? (
+            <FaSearch
+              className="text-light fs-5"
+              style={{ cursor: "pointer" }}
+              onClick={() => setShowSearch(true)}
+            />
+          ) : (
+            <form onSubmit={handleSearch} className="d-flex align-items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                autoFocus
+                className="form-control rounded-pill px-3"
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#fff",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  width: "200px",
+                }}
+              />
+              <button
+                type="submit"
+                className="btn btn-sm btn-warning rounded-pill px-3"
+              >
+                Go
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* Mobile Menu Button */}
+        <button
+          className="d-md-none btn text-light fs-4 ms-2"
+          onClick={toggleMenu}
+          style={{
+            transition: "0.3s",
+            borderRadius: "8px",
+            padding: "4px 8px",
+            background: "rgba(255,255,255,0.1)",
+          }}
+        >
+          {menuOpen ? <FaTimes /> : <FaBars />}
+        </button>
+      </nav>
+
+      {/* Mobile Dropdown Menu */}
+      {menuOpen && (
+        <div className="px-3">
+          <ul className="d-md-none list-unstyled text-center bg-gradient p-3 rounded-3 shadow-lg">
             <li
-              style={{ cursor: 'pointer' }}
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="py-2"
+              style={{ cursor: "pointer" }}
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             >
               Home
             </li>
-            <li
-              style={{ cursor: 'pointer' }}
-              onClick={() => scrollToSection(uploadRef)}
-            >
+            <li className="py-2" style={{ cursor: "pointer" }} onClick={() => scrollToSection(uploadRef)}>
               About
             </li>
-            <li
-              style={{ cursor: 'pointer' }}
-              onClick={() => scrollToSection(uploadRef)}
-            >
+            <li className="py-2" style={{ cursor: "pointer" }} onClick={() => scrollToSection(uploadRef)}>
               Upload
             </li>
-            <li
-              style={{ cursor: 'pointer' }}
-              onClick={() => scrollToSection(chatRef)}
-            >
+            <li className="py-2" style={{ cursor: "pointer" }} onClick={() => scrollToSection(chatRef)}>
               ChatBot
             </li>
           </ul>
-        </nav>
-        {menuOpen && (
-          <ul className='d-md-none list-unstyled text-center bg-gradient p-3 rounded-3 mx-3 mb-3 shadow-lg'>
-            <li
-              className='py-2'
-              style={{ cursor: 'pointer' }}
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            >
-              Home
-            </li>
-            <li
-              className='py-2'
-              style={{ cursor: 'pointer' }}
-              onClick={() => scrollToSection(uploadRef)}
-            >
-              Upload
-            </li>
-            <li
-              className='py-2'
-              style={{ cursor: 'pointer' }}
-              onClick={() => scrollToSection(chatRef)}
-            >
-              ChatBot
-            </li>
-          </ul>
-        )}
-      </header>
+        </div>
+      )}
+    </header>
 
       {/* Hero Section */}
       <section
