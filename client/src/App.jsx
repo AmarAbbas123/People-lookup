@@ -637,7 +637,7 @@ export default function App() {
 
             {/* Footer Content */}
             <div className='col-md-4  text-center '>
-              <h4 className='text-light mb-2'></h4>
+              <h4 className='text-light mb-2'>Contat</h4>
               <div className='mb-1 d-flex justify-content-center align-items-center gap-2'>
                 <span className='fs-5 text-info'> 📞</span>
                 <span className='text-light'>+1 (555) 123-4567</span>
