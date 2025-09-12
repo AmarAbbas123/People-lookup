@@ -1,122 +1,85 @@
-// server/routes/people.js
 const express = require("express");
-const multer = require("multer");
-const csv = require("csv-parser");
-const fs = require("fs");
-const path = require("path");
-const Person = require("../models/Person");
-const { embedText, personToSnippet } = require("../utils/embedder");
+const { HfInference } = require("@huggingface/inference");
+const People = require("../models/people"); // your MongoDB schema
 
 const router = express.Router();
-const upload = multer({
-  dest: path.join(__dirname, "../uploads"),
-  limits: { fileSize: 100 * 1024 * 1024 },
-});
+const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
 
-function detectSeparator(filePath) {
+// Function to get embeddings
+async function getEmbedding(text) {
   try {
-    const sample = fs.readFileSync(filePath, "utf8").slice(0, 2000);
-    const comma = (sample.match(/,/g) || []).length;
-    const semicolon = (sample.match(/;/g) || []).length;
-    const tab = (sample.match(/\t/g) || []).length;
-    if (semicolon > comma && semicolon > tab) return ";";
-    if (tab > comma && tab > semicolon) return "\t";
-    return ",";
-  } catch {
-    return ",";
-  }
-}
-
-function mapRow(row) {
-  const norm = {};
-  for (const [k, v] of Object.entries(row)) {
-    if (!k) continue;
-    const key = String(k).trim().toLowerCase();
-    norm[key] = typeof v === "string" ? v.trim() : v;
-  }
-  return {
-    name: norm.name || "",
-    description: norm.description || "",
-    category: norm.category || "",
-    blockchain: norm.blockchain || "",
-    device: norm.device || "",
-    status: norm.status || "",
-    nft: norm.nft || "",
-    f2p: norm.f2p || "",
-    p2e: norm.p2e || "",
-    p2e_score: norm.p2e_score ? Number(norm.p2e_score) : 0,
-  };
-}
-
-router.post("/upload", upload.single("file"), async (req, res, next) => {
-  if (!req.file) return res.status(400).json({ message: "CSV file is required" });
-
-  const filePath = req.file.path;
-  const separator = detectSeparator(filePath);
-
-  try {
-    // 1) parse CSV
-    const rows = [];
-    await new Promise((resolve, reject) => {
-      fs.createReadStream(filePath)
-        .pipe(csv({ separator }))
-        .on("data", (row) => {
-          const mapped = mapRow(row);
-          if (mapped.name) rows.push(mapped);
-        })
-        .on("end", resolve)
-        .on("error", reject);
+    const response = await hf.featureExtraction({
+      model: "sentence-transformers/all-MiniLM-L6-v2", // free embedding model
+      inputs: text,
     });
+    return response; // returns an array of numbers
+  } catch (err) {
+    console.error("Embedding error:", err);
+    return null;
+  }
+}
 
-    // 2) embed and upsert in chunks
-    const chunkSize = 100; // tune for memory & speed
-    let totalUpserted = 0;
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
+// Upload CSV → Convert to embeddings → Save to DB
+router.post("/upload", async (req, res) => {
+  try {
+    const { data } = req.body; // assume CSV parsed to JSON
+    for (const row of data) {
+      const text = `${row.name} ${row.description} ${row.category}`;
+      const embedding = await getEmbedding(text);
 
-      // compute embeddings sequentially per doc (we avoid flooding CPU/memory)
-      for (const doc of chunk) {
-        try {
-          const snippet = personToSnippet(doc);
-          doc.embedding = await embedText(snippet);
-        } catch (e) {
-          console.error("Embedding error for", doc.name, e.message);
-          doc.embedding = undefined;
-        }
-      }
-
-      // bulk upsert
-      const ops = chunk.map((p) => ({
-        updateOne: {
-          filter: { name: p.name },
-          update: { $set: p },
-          upsert: true,
-        },
-      }));
-      const r = await Person.bulkWrite(ops, { ordered: false });
-      totalUpserted += (r.upsertedCount || 0) + (r.modifiedCount || 0);
+      const person = new People({
+        ...row,
+        embedding,
+      });
+      await person.save();
     }
 
-    const dbCount = await Person.countDocuments();
-    res.json({ message: "CSV processed with embeddings", parsedRows: rows.length, totalUpserted, dbCount });
+    res.json({ success: true, message: "CSV uploaded & embeddings saved!" });
   } catch (err) {
-    next(err);
-  } finally {
-    fs.unlink(filePath, () => {});
+    console.error("Upload error:", err);
+    res.status(500).json({ error: "Failed to upload CSV" });
   }
 });
 
-// Keep the quick search by name if you want
-router.get("/people", async (req, res, next) => {
+// Chat route
+router.post("/chat", async (req, res) => {
   try {
-    const { name, limit } = req.query;
-    if (!name) return res.status(400).json({ message: "Query param 'name' is required" });
-    const queryLimit = Math.min(Number(limit) || 100, 1000);
-    const people = await Person.find({ name: { $regex: new RegExp(name, "i") } }).limit(queryLimit).lean();
-    res.json(people);
+    const { query } = req.body;
+
+    // Convert query to embedding
+    const queryEmbedding = await getEmbedding(query);
+
+    // Find closest match in DB (cosine similarity)
+    const people = await People.find();
+    let bestMatch = null;
+    let bestScore = -1;
+
+    people.forEach((person) => {
+      const score =
+        cosineSimilarity(queryEmbedding, person.embedding || []);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = person;
+      }
+    });
+
+    res.json({
+      answer: bestMatch
+        ? `Best match: ${bestMatch.name} (${bestMatch.category})`
+        : "No match found.",
+    });
   } catch (err) {
-    next(err);
+    console.error("Chat error:", err);
+    res.status(500).json({ error: "Failed to process chat" });
   }
 });
+
+// Cosine similarity function
+function cosineSimilarity(a, b) {
+  const dot = a.reduce((sum, val, i) => sum + val * b[i], 0);
+  const magA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+  const magB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+  return dot / (magA * magB);
+}
 
 module.exports = router;

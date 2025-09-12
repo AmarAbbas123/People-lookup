@@ -1,3 +1,4 @@
+// server/models/Person.js
 const mongoose = require("mongoose");
 
 const PersonSchema = new mongoose.Schema(
@@ -13,8 +14,8 @@ const PersonSchema = new mongoose.Schema(
     p2e: String,
     p2e_score: { type: Number, default: 0 },
 
-    // NEW: vector embedding
-    embedding: { type: [Number], default: [] },
+    // embedding stored as plain number array (normalized)
+    embedding: { type: [Number], default: undefined },
   },
   { timestamps: true }
 );
