@@ -13,7 +13,7 @@ const PersonSchema = new mongoose.Schema(
     p2e: String,
     p2e_score: { type: Number, default: 0 },
 
-    // NEW: vector embedding
+    // Vector embedding (from Hugging Face instead of OpenAI)
     embedding: { type: [Number], default: [] },
   },
   { timestamps: true }

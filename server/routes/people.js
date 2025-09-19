@@ -3,17 +3,44 @@ const multer = require("multer");
 const csv = require("csv-parser");
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios"); // 👈 use axios for Hugging Face API
 const Person = require("../models/Person");
-const OpenAI = require("openai");
 
 const router = express.Router();
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Multer upload config
 const upload = multer({
   dest: path.join(__dirname, "../uploads"),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
 });
+
+// 🔹 Hugging Face API call for embeddings
+async function embedBatch(docs) {
+  if (!docs.length) return [];
+
+  const model = process.env.EMBEDDING_MODEL || "sentence-transformers/all-MiniLM-L6-v2";
+  const input = docs.map(docToEmbedText);
+
+  try {
+    const resp = await axios.post(
+      `https://api-inference.huggingface.co/pipeline/feature-extraction/${model}`,
+      { inputs: input },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.HF_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 60000,
+      }
+    );
+
+    // API returns an array of vectors for each input
+    return resp.data.map((vec) => Array.isArray(vec[0]) ? vec[0] : vec);
+  } catch (err) {
+    console.error("Hugging Face embedding error:", err.response?.data || err.message);
+    return docs.map(() => []); // return empty embeddings on failure
+  }
+}
 
 function detectSeparator(filePath) {
   try {
@@ -67,15 +94,6 @@ function docToEmbedText(p) {
     .join("\n");
 }
 
-async function embedBatch(docs) {
-  if (!docs.length) return [];
-  const model = process.env.EMBEDDING_MODEL || "text-embedding-3-small";
-  const input = docs.map(docToEmbedText);
-  const resp = await openai.embeddings.create({ model, input });
-  // Return array of vectors
-  return resp.data.map((d) => d.embedding);
-}
-
 // Upload CSV and create embeddings in batches
 router.post("/upload", upload.single("file"), async (req, res, next) => {
   if (!req.file) return res.status(400).json({ message: "CSV file is required" });
@@ -113,7 +131,6 @@ router.post("/upload", upload.single("file"), async (req, res, next) => {
         if (!mapped.name) return;
         pending.push(mapped);
 
-        // If embedding batch filled, embed + attach vectors
         if (pending.length >= batchSize) {
           parser.pause();
           (async () => {
@@ -152,7 +169,7 @@ router.post("/upload", upload.single("file"), async (req, res, next) => {
 
     const dbCount = await Person.countDocuments();
     res.json({
-      message: "CSV processed with embeddings",
+      message: "CSV processed with Hugging Face embeddings",
       parsedRows,
       totalUpserted,
       dbCount,
@@ -164,19 +181,7 @@ router.post("/upload", upload.single("file"), async (req, res, next) => {
   }
 });
 
-// (Kept) simple search endpoint if you still need it
-router.get("/people", async (req, res, next) => {
-  try {
-    const { name, limit } = req.query;
-    if (!name) return res.status(400).json({ message: "Query param 'name' is required" });
-    const queryLimit = Math.min(Number(limit) || 100, 1000);
-    const people = await Person.find({ name: { $regex: new RegExp(name, "i") } })
-      .limit(queryLimit)
-      .lean();
-    res.json(people);
-  } catch (err) {
-    next(err);
-  }
-});
+// Simple search endpoint
+
 
 module.exports = router;
