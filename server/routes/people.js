@@ -182,6 +182,18 @@ router.post("/upload", upload.single("file"), async (req, res, next) => {
 });
 
 // Simple search endpoint
-
+router.get("/people", async (req, res, next) => {
+  try {
+    const { name, limit } = req.query;
+    if (!name) return res.status(400).json({ message: "Query param 'name' is required" });
+    const queryLimit = Math.min(Number(limit) || 100, 1000);
+    const people = await Person.find({ name: { $regex: new RegExp(name, "i") } })
+      .limit(queryLimit)
+      .lean();
+    res.json(people);
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;
