@@ -51,7 +51,7 @@ function cosineSim(a, b) {
 // Get embedding from Hugging Face
 async function embedText(text) {
   const response = await fetch(
-    `https://api-inference.huggingface.co/pipeline/feature-extraction/${EMB_MODEL}`,
+    
     {
       method: "POST",
       headers: {
