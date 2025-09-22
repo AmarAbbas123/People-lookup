@@ -25,7 +25,7 @@ export default function ChatBot() {
     setSending(true);
 
     try {
-     
+      const res = await API.post("/chat", { question: userText });
       const answer = res.data.answer || "Sorry, no info found.";
       addMessage({ sender: "bot", text: answer });
 
