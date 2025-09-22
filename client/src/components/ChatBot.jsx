@@ -136,7 +136,14 @@ export default function ChatBot() {
             className="form-control bg-dark text-light border-0 rounded-3"
             style={{ minHeight: "48px" }}
           />
-          
+          <button
+            onClick={handleSend}
+            disabled={sending}
+            className="btn fw-bold px-4 rounded-3"
+            style={{ background: "linear-gradient(90deg, #3b82f6, #06b6d4)", color: "#fff" }}
+          >
+            {sending ? "⏳ Sending..." : "🚀 Send"}
+          </button>
         </div>
       </div>
     </div>
