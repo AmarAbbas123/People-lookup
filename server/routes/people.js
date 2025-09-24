@@ -3,7 +3,7 @@ const multer = require("multer");
 const csv = require("csv-parser");
 const fs = require("fs");
 const path = require("path");
-const axios = require("axios"); // 👈 use axios for Hugging Face API
+const axios = require("axios"); // Hugging Face API
 const Person = require("../models/Person");
 
 const router = express.Router();
@@ -14,20 +14,20 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
 });
 
-// 🔹 Hugging Face API call for embeddings
+// Hugging Face API call for embeddings
 async function embedBatch(docs) {
   if (!docs.length) return [];
 
-  const model = process.env.EMBEDDING_MODEL || "sentence-transformers/all-MiniLM-L6-v2";
+  const model = process.env.HF_EMBED_MODEL || "sentence-transformers/all-MiniLM-L6-v2";
   const input = docs.map(docToEmbedText);
 
   try {
     const resp = await axios.post(
-      `https://api-inference.huggingface.co/pipeline/feature-extraction/${model}`,
+      `https://api-inference.huggingface.co/models/${model}`,
       { inputs: input },
       {
         headers: {
-          Authorization: `Bearer ${process.env.HF_API_KEY}`,
+          Authorization: `Bearer ${process.env.HF_API_TOKEN}`, // ✅ FIXED
           "Content-Type": "application/json",
         },
         timeout: 60000,
@@ -35,7 +35,7 @@ async function embedBatch(docs) {
     );
 
     // API returns an array of vectors for each input
-    return resp.data.map((vec) => Array.isArray(vec[0]) ? vec[0] : vec);
+    return resp.data.map((vec) => (Array.isArray(vec[0]) ? vec[0] : vec));
   } catch (err) {
     console.error("Hugging Face embedding error:", err.response?.data || err.message);
     return docs.map(() => []); // return empty embeddings on failure
@@ -100,8 +100,7 @@ router.post("/upload", upload.single("file"), async (req, res, next) => {
 
   const filePath = req.file.path;
   const separator = detectSeparator(filePath);
-  const batchSize = 100; // embedding batch
-  const upsertBatchSize = 500; // db bulkWrite batch
+  const batchSize = 100; // embedding batch size
 
   let parsedRows = 0;
   let totalUpserted = 0;
