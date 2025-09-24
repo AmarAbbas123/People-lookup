@@ -4,7 +4,7 @@ const router = express.Router();
 const Person = require("../models/Person");
 
 // Hugging Face API key (set in .env)
-const HF_API_KEY = process.env.HF_API_KEY;
+const HF_API_TOKEN = process.env.HF_API_TOKEN;
 
 // Models (you can change to better ones if needed)
 const GEN_MODEL = process.env.HF_GEN_MODEL || "mistralai/Mistral-7B-Instruct-v0.2";
@@ -51,11 +51,11 @@ function cosineSim(a, b) {
 // Get embedding from Hugging Face
 async function embedText(text) {
   const response = await fetch(
-    `https://api-inference.huggingface.co/pipeline/feature-extraction/${EMB_MODEL}`,
+    `https://api-inference.huggingface.co/models/${EMB_MODEL}`, // ✅ fixed endpoint
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${HF_API_KEY}`,
+        Authorization: `Bearer ${HF_API_TOKEN}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ inputs: text }),
@@ -63,11 +63,15 @@ async function embedText(text) {
   );
 
   if (!response.ok) {
-    throw new Error(`HF Embedding API failed: ${response.status} ${response.statusText}`);
+    const errText = await response.text();
+    throw new Error(
+      `HF Embedding API failed: ${response.status} ${response.statusText} - ${errText}`
+    );
   }
 
   const data = await response.json();
-  return data[0]; // embedding vector
+  // sometimes response is [[vector]], sometimes [vector]
+  return Array.isArray(data[0]) ? data[0] : data;
 }
 
 // Generate answer from Hugging Face
@@ -85,7 +89,7 @@ async function generateAnswer(question, context) {
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${HF_API_KEY}`,
+        Authorization: `Bearer ${HF_API_TOKEN}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -96,7 +100,10 @@ async function generateAnswer(question, context) {
   );
 
   if (!response.ok) {
-    throw new Error(`HF Generation API failed: ${response.status} ${response.statusText}`);
+    const errText = await response.text();
+    throw new Error(
+      `HF Generation API failed: ${response.status} ${response.statusText} - ${errText}`
+    );
   }
 
   const data = await response.json();
@@ -172,7 +179,7 @@ router.post("/chat", async (req, res) => {
 
     return res.json({ answer, results: topDocs });
   } catch (err) {
-    console.error("Chat error:", err);
+    console.error("Chat error:", err.message);
     return res
       .status(500)
       .json({ answer: "⚠️ Error while answering. Try again." });
