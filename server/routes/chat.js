@@ -4,7 +4,7 @@ const router = express.Router();
 const Person = require("../models/Person");
 
 // Hugging Face API key (set in .env)
-const HF_API_TOKEN = process.env.HF_API_TOKEN;
+const HF_API_TOKEN = process.env.HF_API_KEY;
 
 // Models (you can change to better ones if needed)
 const GEN_MODEL = process.env.HF_GEN_MODEL || "mistralai/Mistral-7B-Instruct-v0.2";
