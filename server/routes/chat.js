@@ -4,11 +4,9 @@ const router = express.Router();
 const Person = require("../models/Person");
 
 // Hugging Face API key (set in .env)
-const HF_API_TOKEN = process.env.HF_API_KEY;
+const HF_API_KEY = process.env.HF_API_KEY; // ✅ fixed
 
 // Models (you can change to better ones if needed)
-const GEN_MODEL = process.env.HF_GEN_MODEL || "mistralai/Mistral-7B-Instruct-v0.2";
-const EMB_MODEL = process.env.HF_EMBED_MODEL || "sentence-transformers/all-MiniLM-L6-v2";
 
 const VECTOR_BACKEND = (process.env.VECTOR_BACKEND || "local").toLowerCase();
 const VECTOR_INDEX_NAME = process.env.VECTOR_INDEX_NAME || "people_embedding_index";
@@ -51,11 +49,11 @@ function cosineSim(a, b) {
 // Get embedding from Hugging Face
 async function embedText(text) {
   const response = await fetch(
-    `https://api-inference.huggingface.co/models/${EMB_MODEL}`, // ✅ fixed endpoint
+    `https://api-inference.huggingface.co/models/${EMB_MODEL}`, // ✅ correct endpoint
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${HF_API_TOKEN}`,
+        Authorization: `Bearer ${HF_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ inputs: text }),
@@ -89,7 +87,7 @@ async function generateAnswer(question, context) {
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${HF_API_TOKEN}`,
+        Authorization: `Bearer ${HF_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
