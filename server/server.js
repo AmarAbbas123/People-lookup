@@ -24,8 +24,6 @@ mongoose.connect(process.env.MONGODB_URI, {
   });
 
 // Routes
-app.use("/api", peopleRoutes);
-app.use("/api", chatRoutes);
 
 // Health check route (useful for monitoring)
 app.get("/api/health", (req, res) => {
