@@ -1,5 +1,4 @@
 // utils/embedder.js
-const { pipeline } = require('@xenova/transformers');
 
 let embedder;
 
@@ -9,6 +8,10 @@ let embedder;
 async function loadModel() {
   if (!embedder) {
     console.log("Loading embedding model: Xenova/all-MiniLM-L6-v2 ...");
+
+    // ✅ dynamic import for ESM module
+    const { pipeline } = await import('@xenova/transformers');
+
     embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     console.log("Embedding model loaded ✅");
   }
