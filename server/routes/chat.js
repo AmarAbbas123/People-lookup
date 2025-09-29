@@ -2,16 +2,18 @@
 const express = require("express");
 const router = express.Router();
 const Person = require("../models/Person");
+const { getEmbedding } = require("../utils/embedder"); // ✅ local embeddings
 
 // Hugging Face API key (set in .env)
-const HF_API_KEY = process.env.HF_API_KEY; // ✅ fixed
+const HF_API_KEY = process.env.HF_API_KEY;
 
-// Models (you can change to better ones if needed)
-const GEN_MODEL = process.env.HF_GEN_MODEL || "mistralai/Mistral-7B-Instruct-v0.2";
-const EMB_MODEL = process.env.HF_EMBED_MODEL || "sentence-transformers/all-MiniLM-L6-v2";
+// Models
+const GEN_MODEL =
+  process.env.HF_GEN_MODEL || "mistralai/Mistral-7B-Instruct-v0.2";
 
 const VECTOR_BACKEND = (process.env.VECTOR_BACKEND || "local").toLowerCase();
-const VECTOR_INDEX_NAME = process.env.VECTOR_INDEX_NAME || "people_embedding_index";
+const VECTOR_INDEX_NAME =
+  process.env.VECTOR_INDEX_NAME || "people_embedding_index";
 
 // ---------------- Helpers ----------------
 
@@ -27,15 +29,18 @@ function formatPerson(p) {
     p.nft ? `NFT: ${p.nft}` : null,
     p.f2p ? `F2P: ${p.f2p}` : null,
     p.p2e ? `P2E: ${p.p2e}` : null,
-    (p.p2e_score !== undefined && p.p2e_score !== null)
-      ? `P2E Score: ${p.p2e_score}` : null,
+    p.p2e_score !== undefined && p.p2e_score !== null
+      ? `P2E Score: ${p.p2e_score}`
+      : null,
   ].filter(Boolean);
   return parts.join("\n");
 }
 
 // Cosine similarity (for local retrieval)
 function cosineSim(a, b) {
-  let dot = 0, na = 0, nb = 0;
+  let dot = 0,
+    na = 0,
+    nb = 0;
   const len = Math.min(a.length, b.length);
   for (let i = 0; i < len; i++) {
     const x = a[i] || 0;
@@ -48,30 +53,9 @@ function cosineSim(a, b) {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-// Get embedding from Hugging Face
+// ✅ Use local embeddings instead of API
 async function embedText(text) {
-  const response = await fetch(
-    `https://api-inference.huggingface.co/models/${EMB_MODEL}`, // ✅ correct endpoint
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${HF_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ inputs: text }),
-    }
-  );
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(
-      `HF Embedding API failed: ${response.status} ${response.statusText} - ${errText}`
-    );
-  }
-
-  const data = await response.json();
-  // sometimes response is [[vector]], sometimes [vector]
-  return Array.isArray(data[0]) ? data[0] : data;
+  return await getEmbedding(text);
 }
 
 // Generate answer from Hugging Face
@@ -79,7 +63,7 @@ async function generateAnswer(question, context) {
   const system = [
     "You are a helpful assistant that ONLY uses the provided context.",
     "If the answer is not in the context, say you don't have that information.",
-    "Be concise and include names and key fields when possible."
+    "Be concise and include names and key fields when possible.",
   ].join(" ");
 
   const prompt = `${system}\n\nQuestion: ${question}\n\nContext:\n${context}`;
@@ -122,7 +106,7 @@ router.post("/chat", async (req, res) => {
   }
 
   try {
-    // 1) Embed the question
+    // 1) Embed the question (local)
     const qvec = await embedText(question);
 
     // 2) Retrieve top-k from DB
@@ -142,8 +126,16 @@ router.post("/chat", async (req, res) => {
         },
         {
           $project: {
-            name: 1, description: 1, category: 1, blockchain: 1, device: 1,
-            status: 1, nft: 1, f2p: 1, p2e: 1, p2e_score: 1,
+            name: 1,
+            description: 1,
+            category: 1,
+            blockchain: 1,
+            device: 1,
+            status: 1,
+            nft: 1,
+            f2p: 1,
+            p2e: 1,
+            p2e_score: 1,
             _score: { $meta: "vectorSearchScore" },
           },
         },
@@ -151,7 +143,9 @@ router.post("/chat", async (req, res) => {
       topDocs = await Person.aggregate(pipeline);
     } else {
       // Local cosine similarity
-      const candidates = await Person.find({ embedding: { $exists: true, $ne: [] } })
+      const candidates = await Person.find({
+        embedding: { $exists: true, $ne: [] },
+      })
         .limit(5000)
         .lean();
       const scored = candidates.map((d) => ({
