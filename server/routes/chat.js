@@ -1,23 +1,13 @@
-// routes/chat.js
-const express = require("express");
+import express from "express";
+import Person from "../models/Person.js";
+import { getEmbedding } from "../utils/embedder.js";
+
 const router = express.Router();
-const Person = require("../models/Person");
-const { getEmbedding } = require("../utils/embedder"); // ✅ local embeddings
-
-// Hugging Face API key (set in .env)
-const HF_API_KEY = process.env.HF_API_KEY;
-
-// Models
-const GEN_MODEL =
-  process.env.HF_GEN_MODEL || "mistralai/Mistral-7B-Instruct-v0.2";
 
 const VECTOR_BACKEND = (process.env.VECTOR_BACKEND || "local").toLowerCase();
-const VECTOR_INDEX_NAME =
-  process.env.VECTOR_INDEX_NAME || "people_embedding_index";
+const VECTOR_INDEX_NAME = process.env.VECTOR_INDEX_NAME || "people_embedding_index";
 
 // ---------------- Helpers ----------------
-
-// Format a Person into readable text
 function formatPerson(p) {
   const parts = [
     `Name: ${p.name || "—"}`,
@@ -29,18 +19,14 @@ function formatPerson(p) {
     p.nft ? `NFT: ${p.nft}` : null,
     p.f2p ? `F2P: ${p.f2p}` : null,
     p.p2e ? `P2E: ${p.p2e}` : null,
-    p.p2e_score !== undefined && p.p2e_score !== null
-      ? `P2E Score: ${p.p2e_score}`
-      : null,
+    (p.p2e_score !== undefined && p.p2e_score !== null)
+      ? `P2E Score: ${p.p2e_score}` : null,
   ].filter(Boolean);
   return parts.join("\n");
 }
 
-// Cosine similarity (for local retrieval)
 function cosineSim(a, b) {
-  let dot = 0,
-    na = 0,
-    nb = 0;
+  let dot = 0, na = 0, nb = 0;
   const len = Math.min(a.length, b.length);
   for (let i = 0; i < len; i++) {
     const x = a[i] || 0;
@@ -53,50 +39,7 @@ function cosineSim(a, b) {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-// ✅ Use local embeddings instead of API
-async function embedText(text) {
-  return await getEmbedding(text);
-}
-
-// Generate answer from Hugging Face
-async function generateAnswer(question, context) {
-  const system = [
-    "You are a helpful assistant that ONLY uses the provided context.",
-    "If the answer is not in the context, say you don't have that information.",
-    "Be concise and include names and key fields when possible.",
-  ].join(" ");
-
-  const prompt = `${system}\n\nQuestion: ${question}\n\nContext:\n${context}`;
-
-  const response = await fetch(
-    `https://api-inference.huggingface.co/models/${GEN_MODEL}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${HF_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        inputs: prompt,
-        parameters: { max_new_tokens: 300, temperature: 0.2 },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(
-      `HF Generation API failed: ${response.status} ${response.statusText} - ${errText}`
-    );
-  }
-
-  const data = await response.json();
-  return (data[0]?.generated_text || "").trim();
-}
-
 // ---------------- Routes ----------------
-
-// Chat endpoint
 router.post("/chat", async (req, res) => {
   const question = (req.body.question || "").trim();
   if (!question) {
@@ -106,14 +49,13 @@ router.post("/chat", async (req, res) => {
   }
 
   try {
-    // 1) Embed the question (local)
-    const qvec = await embedText(question);
+    // 1) Embed the question
+    const qvec = await getEmbedding(question);
 
     // 2) Retrieve top-k from DB
     let topDocs = [];
 
     if (VECTOR_BACKEND === "atlas") {
-      // MongoDB Atlas Vector Search
       const pipeline = [
         {
           $vectorSearch: {
@@ -126,26 +68,15 @@ router.post("/chat", async (req, res) => {
         },
         {
           $project: {
-            name: 1,
-            description: 1,
-            category: 1,
-            blockchain: 1,
-            device: 1,
-            status: 1,
-            nft: 1,
-            f2p: 1,
-            p2e: 1,
-            p2e_score: 1,
+            name: 1, description: 1, category: 1, blockchain: 1, device: 1,
+            status: 1, nft: 1, f2p: 1, p2e: 1, p2e_score: 1,
             _score: { $meta: "vectorSearchScore" },
           },
         },
       ];
       topDocs = await Person.aggregate(pipeline);
     } else {
-      // Local cosine similarity
-      const candidates = await Person.find({
-        embedding: { $exists: true, $ne: [] },
-      })
+      const candidates = await Person.find({ embedding: { $exists: true, $ne: [] } })
         .limit(5000)
         .lean();
       const scored = candidates.map((d) => ({
@@ -168,8 +99,8 @@ router.post("/chat", async (req, res) => {
       .map((p, i) => `#${i + 1}\n${formatPerson(p)}`)
       .join("\n\n---\n\n");
 
-    // 4) Generate answer
-    const answer = await generateAnswer(question, context);
+    // 4) Dummy response for now (can integrate LLM later)
+    const answer = `Based on your dataset, here are the top results:\n\n${context}`;
 
     return res.json({ answer, results: topDocs });
   } catch (err) {
@@ -180,4 +111,4 @@ router.post("/chat", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
