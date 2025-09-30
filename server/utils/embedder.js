@@ -24,5 +24,5 @@ export async function getEmbedding(text) {
   if (!text || !text.trim()) return [];
   const extractor = await loadModel();
   const output = await extractor(text, { pooling: "mean", normalize: true });
-  return Array.from(output.data); // convert tensor to plain array
+  return Array.from(output.data); // tensor → array
 }
