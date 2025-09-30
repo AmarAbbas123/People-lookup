@@ -8,8 +8,11 @@ dotenv.config();
 
 async function seed() {
   try {
+    // Debug log
+    console.log("🔑 Loaded MONGO_URI:", process.env.MONGO_URI);
+
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI, {
+    await mongoose.connect(process.env.MONGO_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
