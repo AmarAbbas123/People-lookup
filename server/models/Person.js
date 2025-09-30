@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const PersonSchema = new mongoose.Schema({
+const personSchema = new mongoose.Schema({
   name: String,
   description: String,
   category: String,
@@ -11,7 +11,7 @@ const PersonSchema = new mongoose.Schema({
   f2p: String,
   p2e: String,
   p2e_score: Number,
-  embedding: [Number],
+  embedding: { type: [Number], default: [] } // ✅ store embeddings
 });
 
-export default mongoose.model("Person", PersonSchema);
+export default mongoose.model("Person", personSchema);
