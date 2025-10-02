@@ -9,10 +9,7 @@ const Person = require("../models/Person");
 const router = express.Router();
 
 // Multer upload config
-const upload = multer({
-  dest: path.join(__dirname, "../uploads"),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
-});
+
 
 // Hugging Face API call for embeddings
 async function embedBatch(docs) {
